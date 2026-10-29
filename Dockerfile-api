@@ -1,0 +1,12 @@
+FROM python:3.11-slim
+# set environment variables
+ENV PYTHONUNBUFFERED 1
+
+RUN apt-get update && apt-get install -y libpq-dev gcc python-dev-is-python3 musl-dev ffmpeg libsm6 libxext6 postgresql-client-common postgresql-client git cron
+RUN mkdir /code
+WORKDIR /code
+ADD requirements.txt /code/
+RUN pip3 install -r requirements.txt
+ADD ./ /code/
+# RUN crontab cron-file.txt
+# RUN service cron start # status of cron can be checked with service cron status

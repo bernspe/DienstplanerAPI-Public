@@ -1,0 +1,149 @@
+version: '3'
+
+services:
+  db:
+    image: postgres:14.10
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+   # open port only for debugging
+   # ports:
+   #     - "5432:5432"
+    env_file:
+      - .env
+    networks:
+      - backend
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  db-admin:
+    restart: always
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    env_file:
+      - .env
+    depends_on:
+      - db
+    ports:
+      - "127.0.0.1:8080:80"
+    networks:
+      - backend
+
+  api:
+    image: dienstplan_api:${APP_VERSION}
+    build:
+      context: .
+      dockerfile: Dockerfile-api
+    expose:
+      - 8000
+    volumes:
+      - media:/code/media
+      - static:/code/static
+    depends_on:
+      - db
+    #Use for remote deploy
+    # --threads=4 --worker-class=gthread --worker-tmp-dir /dev/shm
+    command: bash -c "python manage.py collectstatic --no-input && python manage.py migrate && python manage.py initadmin && python manage.py create_groups && python manage.py createapplication --client-id ${CLIENT_ID} --client-secret ${CLIENT_SECRET} --skip-authorization --name DienstplanAuth confidential password && gunicorn --bind 0.0.0.0:8000 DienstplanerAPI.wsgi:application"
+    # command: bash -c "tail -f /dev/null"
+    # command: bash -c "python manage.py collectstatic --no-input && python manage.py makemigrations && python manage.py migrate && python manage.py runserver 0.0.0.0:8002"
+    restart: always
+    networks:
+      - backend
+    env_file:
+      - .env
+    environment:
+#      - APP_ENV=development
+# This is for remote deploy
+      - APP_ENV=production
+
+  nginx:
+    build: ./nginx
+    volumes:
+        - static:/code/static
+        - /etc/letsencrypt/live:/etc/letsencrypt/live # current certificate
+        - /etc/letsencrypt/archive:/etc/letsencrypt/archive
+    ports:
+        - "80:80"
+        - "443:443"
+    depends_on:
+        - api
+        - privacyidea
+    networks:
+      - backend
+
+  privacyidea:
+    image: khalibre/privacyidea:v3.9.3-d1.2.2-python-3.9.18-slim-bookworm
+    ports:
+      - '127.0.0.1:8081:8080'
+    environment:
+      - PI_DB_VENDOR=postgresql
+      - PI_DB_NAME=pi
+      - PI_DB_HOST=db-pi
+      - PI_DB_USER=${POSTGRES_USER}
+      - PI_DB_PASSWORD=${POSTGRES_PASSWORD}
+      - PI_ADMIN_USER=${PI_ADMIN_USER}
+      - PI_ADMIN_PASSWORD=${PI_ADMIN_PASSWORD}
+      - PI_SECRET_KEY=${PI_SECRET_KEY}
+      - PI_PEPPER=${PI_PEPPER}
+      - PI_PAGE_TITLE=pivacyIDEA
+    depends_on:
+      - db-pi
+      - db
+    restart: always
+    networks:
+      - backend
+
+  db-pi:
+    image: postgres:14.10
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: pi
+    env_file:
+      - .env
+    networks:
+      - backend
+    volumes:
+      - postgres-data-pi:/var/lib/postgresql/data
+
+  redis:
+    env_file:
+      - .env
+    image: redis
+    volumes:
+      - redis:/data
+    networks:
+      - backend
+
+  worker:
+    image: dienstplan_api:${APP_VERSION}
+    command: celery -A DienstplanerAPI worker -B -l WARNING --scheduler django_celery_beat.schedulers:DatabaseScheduler -E
+    user: nobody
+    depends_on:
+      - redis
+      - db
+      - api
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=production
+    networks:
+      - backend
+    volumes:
+      - media:/code/media
+    restart: always
+
+networks:
+  backend:
+    driver: bridge
+
+
+volumes:
+  postgres-data:
+  media:
+  static:
+  postgres-data-pi:
+  redis:

@@ -1,0 +1,12 @@
+.git
+.env
+.idea
+venv
+venv-celery
+__pycache__
+*.pyc
+*.private
+*.private.md
+cert
+db.sqlite3
+notebooks

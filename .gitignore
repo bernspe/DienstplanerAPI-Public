@@ -1,0 +1,24 @@
+# Konfiguration und Geheimnisse
+.env
+*.private
+*.private.md
+cert/
+*.key
+*.pem
+*.crt
+
+# Python / Umgebungen
+venv/
+venv-celery/
+__pycache__/
+*.pyc
+
+# Laufzeitdaten
+db.sqlite3
+media/
+/static/
+
+# Editor / System
+.idea/
+.vscode/
+.DS_Store

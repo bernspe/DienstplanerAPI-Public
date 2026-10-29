@@ -1,0 +1,2 @@
+@daily python /code/manage.py cleartokens
+@daily python /code/manage.py dbbackup
